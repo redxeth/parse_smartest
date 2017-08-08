@@ -1,2 +1,8 @@
-# parse_smartest
-Script to permit parsing an Agilent Test Flow
+# parse_church_data
+Script for parsing a SmarTest test flow
+
+Generates CSV of all tests suites and their related test method data.
+
+Does not include arbitrary test method names.
+
+Uses standard *.tf ASCII file (not provided)
