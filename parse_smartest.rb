@@ -37,6 +37,9 @@ def print_test_flow(options={})
       if line =~ /, open,/
         line.gsub!(/, open,/,", closed, ")
       end
+      if line =~ /if @ == 1 then/ 
+        line.gsub!(/@ == 1/,"@YESRUN == 1")
+      end
       print "#{line}\n"
     end
 
@@ -385,14 +388,25 @@ end
 begin
 
   # interpret command line options
-  @command_options = {}
+  @command_options = {
+    testflow:   false,
+    testsuites: true,
+  }
   option_parser = OptionParser.new do |opts|
     opts.banner = "Usage: parse_smartest.rb testflow.tf [options]"
     opts.separator ''
     opts.on('-h', '--help', 'Display help' ) { puts opts; exit }
+    opts.separator ("--------------------")
+    opts.on('-s', '--testsuites', 'Output test suite CSV of a test flow file (Default operation)') { @command_options[:testsuites] = true }
+    opts.on('-f', '--testflow', 'Output test_flow section of a test flow file') { @command_options[:testflow] = true }
   end
   
   option_parser.parse!
+
+  # test flow option overrides test suites output option
+  if @command_options[:testflow]
+    @command_options[:testsuites] = false
+  end
   
   # ERROR CHECKING of arguments
   if ARGV.length != 1
@@ -411,16 +425,16 @@ begin
   get_file_data
 
   # Process test method data first
-  get_test_methods
+  get_test_methods if @command_options[:testsuites] 
 #  print_test_methods
 
   # Then process test suite data
-  get_test_suites
+  get_test_suites if @command_options[:testsuites] 
 #  print_test_suites
- print_test_suites_full
+  print_test_suites_full if @command_options[:testsuites] 
 
   # process test flow data
-#  print_test_flow
+  print_test_flow if @command_options[:testflow] 
 
 
 end
