@@ -15,6 +15,38 @@ include DansRubyLibrary
 #  Outputs CSV to display, capture to file if desired
 #
 
+# output test flow (as what??)
+def print_test_flow(options={})
+  options = {
+  }.merge(options)
+
+  in_test_flow_section = false
+  # go thru file data
+  @testflow_lines.each_index do |linenum|
+    line = @testflow_lines[linenum]
+    line.gsub!(/\r/,""); line.gsub!(/\n/,"")
+
+    if line =~ /^------/ && in_test_flow_section
+      in_test_flow_section = false
+    end
+
+
+    if in_test_flow_section
+      
+      # close all groups for easier comparison
+      if line =~ /, open,/
+        line.gsub!(/, open,/,", closed, ")
+      end
+      print "#{line}\n"
+    end
+
+    if line =~ /^test_flow/
+      in_test_flow_section = true
+    end
+  end
+
+end
+
 # save test method to master list
 # indicate section, either: :class, :parameters, :limits
 def save_test_method(test_method, section)
@@ -385,6 +417,10 @@ begin
   # Then process test suite data
   get_test_suites
 #  print_test_suites
-  print_test_suites_full
+ print_test_suites_full
+
+  # process test flow data
+#  print_test_flow
+
 
 end
