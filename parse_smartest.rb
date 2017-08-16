@@ -66,7 +66,8 @@ def save_test_method(test_method, section)
     (@test_methods[name_key])[:class] = test_method[:class]
   end
   if section == :parameters
-    (@test_methods[name_key])[:parameters] = test_method[:parameters]
+    // TM parameters get sorted
+    (@test_methods[name_key])[:parameters] = test_method[:parameters].gsub(/\s+/,"").split(/\;/).sort.join("\;")
   end
   if section == :limits
     (@test_methods[name_key])[:limits] = test_method[:limits]
@@ -276,7 +277,9 @@ def get_test_suites(options={})
             temp = line.split(' ')
             line_data = temp[2] # grab data
             line_data.gsub!(/;/,"")    # remove semicolon
-            test_suite[datatype.to_sym] = line_data
+            unless @command_options[:omit_local_flags] && datatype == :local_flags
+              test_suite[datatype.to_sym] = line_data
+            end
           end
         end
       end
@@ -336,8 +339,10 @@ def print_test_suites_full(options={})
   print "TM parameters "
   print "\n"
 
+  @test_suites_sorted = @test_suites.sort_by { |k| k[:name] }
+
   # CSV data
-  @test_suites.each do |test_suite|
+  @test_suites_sorted.each do |test_suite|
     print "#{test_suite[:name]}, "
     @ts_data_types.each do |datatype|
       unless datatype == :override_testf
@@ -400,6 +405,8 @@ begin
     opts.on('-s', '--testsuites', 'Output test suite CSV of a test flow file (Default operation)') { @command_options[:testsuites] = true }
     opts.on('-f', '--testflow', 'Output test_flow section of a test flow file') { @command_options[:testflow] = true }
   end
+
+  @command_options[:omit_local_flags] = true  # default for now
   
   option_parser.parse!
 
