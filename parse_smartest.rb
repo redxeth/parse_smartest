@@ -66,7 +66,7 @@ def save_test_method(test_method, section)
     (@test_methods[name_key])[:class] = test_method[:class]
   end
   if section == :parameters
-    // TM parameters get sorted
+    # TM parameters get sorted
     (@test_methods[name_key])[:parameters] = test_method[:parameters].gsub(/\s+/,"").split(/\;/).sort.join("\;")
   end
   if section == :limits
