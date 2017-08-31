@@ -37,9 +37,6 @@ def print_test_flow(options={})
       if line =~ /, open,/
         line.gsub!(/, open,/,", closed, ")
       end
-      if line =~ /if @ == 1 then/ 
-        line.gsub!(/@ == 1/,"@YESRUN == 1")
-      end
       print "#{line}\n"
     end
 
