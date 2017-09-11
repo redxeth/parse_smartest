@@ -15,6 +15,87 @@ include DansRubyLibrary
 #  Outputs CSV to display, capture to file if desired
 #
 
+def get_limits(options={})
+  options = {
+  }.merge(options)
+
+  # all limits
+  @test_limits = []
+
+  # go thru file data
+  @limits_lines.each_index do |linenum|
+    line = @limits_lines[linenum]
+    line.gsub!(/\r/,""); line.gsub!(/\n/,"")
+
+    test_limit = {} 
+    temp = line.split(',')
+
+    if temp[0] =~ /Suite name/ || temp[0] =~ /Test mode/ || temp[0] == "\"\""
+      #DH TBD-- for now only supports 1 limit 'test mode' type
+      # e.g. FT (not for various inserts)
+    else
+      test_limit[:test_suite] = temp[0]
+      test_limit[:pins] = temp[1]
+      test_limit[:test_name] = temp[2]
+      test_limit[:test_number] = temp[3]
+      test_limit[:lo_limit] = temp[4]
+      test_limit[:lolim_type] = temp[5]
+      test_limit[:hilim_type] = temp[6]
+      test_limit[:hi_limit] = temp[7]
+      test_limit[:units] = temp[8]
+      test_limit[:bin_s_num] = temp[9]
+      test_limit[:bin_s_name] = temp[10]
+      test_limit[:bin_h_num] = temp[11]
+      test_limit[:bin_h_name] = temp[12]
+      test_limit[:bin_type] = temp[13]
+      test_limit[:bin_reprobe] = temp[14]
+      test_limit[:bin_overon] = temp[15]
+      test_limit[:test_remarks] = temp[16]
+      @test_limits << test_limit
+    end
+  end
+end
+
+def print_limits(options={})
+  options={
+    #ignore_fields: [],              # list of limits fields you want to ignore
+                                    # will not print out column at all
+                                    # DO NOT ignore 'test_suite' or 'test_name'
+    
+    ignore_fields: [:bin_s_num, :bin_s_name, :bin_h_num, :bin_h_name, :bin_type,
+                    :bin_reprobe, :bin_overon, :test_remarks, :test_number]
+
+  }.merge(options)
+
+  test_limits_sorted = @test_limits.sort_by { |k| [k[:test_suite],k[:test_name]] }
+
+  # CSV data
+  #
+  print "Test Suite, Pins, Test Name, Lo Limit, LoLim Type, Hi Lim Type, Hi Limit, Units\n"
+  test_limits_sorted.each do |test_limit|
+    print "#{test_limit[:test_suite]}, "
+
+    print "#{test_limit[:pins]}, " unless options[:ignore_fields].include?(:pins)
+    print "#{test_limit[:test_name]}, " unless options[:ignore_fields].include?(:test_name)
+    print "#{test_limit[:test_number]}, " unless options[:ignore_fields].include?(:test_number)
+    print "#{test_limit[:lo_limit]}, " unless options[:ignore_fields].include?(:lo_limit)
+    print "#{test_limit[:lolim_type]}, " unless options[:ignore_fields].include?(:lolim_type)
+    print "#{test_limit[:hilim_type]}, " unless options[:ignore_fields].include?(:hilim_type)
+    print "#{test_limit[:hi_limit]}, " unless options[:ignore_fields].include?(:hi_limit)
+    print "#{test_limit[:units]}, " unless options[:ignore_fields].include?(:units)
+    print "#{test_limit[:bin_s_num]}, " unless options[:ignore_fields].include?(:bin_s_num)
+    print "#{test_limit[:bin_s_name]}, " unless options[:ignore_fields].include?(:bin_s_name)
+    print "#{test_limit[:bin_h_num]}, " unless options[:ignore_fields].include?(:bin_h_num)
+    print "#{test_limit[:bin_h_name]}, " unless options[:ignore_fields].include?(:bin_h_name)
+    print "#{test_limit[:bin_type]}, " unless options[:ignore_fields].include?(:bin_type)
+    print "#{test_limit[:bin_reprobe]}, " unless options[:ignore_fields].include?(:bin_reprobe)
+    print "#{test_limit[:bin_overon]}, " unless options[:ignore_fields].include?(:bin_overon)
+    print "#{test_limit[:test_remarks]}" unless options[:ignore_fields].include?(:test_remarks)
+    print "\n"
+  end
+
+end
+
 # output test flow (as what??)
 def print_test_flow(options={})
   options = {
@@ -336,10 +417,10 @@ def print_test_suites_full(options={})
   print "TM parameters "
   print "\n"
 
-  @test_suites_sorted = @test_suites.sort_by { |k| k[:name] }
+  test_suites_sorted = @test_suites.sort_by { |k| k[:name] }
 
   # CSV data
-  @test_suites_sorted.each do |test_suite|
+  test_suites_sorted.each do |test_suite|
     print "#{test_suite[:name]}, "
     @ts_data_types.each do |datatype|
       unless datatype == :override_testf
@@ -380,9 +461,17 @@ end
 # reads input data from file,
 # puts into @testflow_lines
 def get_file_data(options={})
+  options={ type: :testflow 
+          }.merge(options)
   fp = FileParser.new
   fp.open(filename: @filename)
-  @testflow_lines = fp.readlines
+  if options[:type] == :testflow
+    @testflow_lines = fp.readlines
+  elsif options[:type] == :limits
+    @limits_lines = fp.readlines
+  else
+    fail "Invalid type '#{options[:type]}' passed to 'get_file_data'!"
+  end
   fp.close()
 end
 
@@ -395,12 +484,13 @@ begin
     testsuites: true,
   }
   option_parser = OptionParser.new do |opts|
-    opts.banner = "Usage: parse_smartest.rb testflow.tf [options]"
+    opts.banner = "Usage: parse_smartest.rb <INPUT FILE> [options]"
     opts.separator ''
     opts.on('-h', '--help', 'Display help' ) { puts opts; exit }
     opts.separator ("--------------------")
-    opts.on('-s', '--testsuites', 'Output test suite CSV of a test flow file (Default operation)') { @command_options[:testsuites] = true }
-    opts.on('-f', '--testflow', 'Output test_flow section of a test flow file') { @command_options[:testflow] = true }
+    opts.on('-s', '--testsuites', 'Output sorted test suite CSV from a test flow file (Default operation)') { @command_options[:testsuites] = true }
+    opts.on('-f', '--testflow', 'Output test_flow section from a test flow file') { @command_options[:testflow] = true }
+    opts.on('-l', '--limits', 'Output sorted limits from a limits file') { @command_options[:limits] = true }
   end
 
   @command_options[:omit_local_flags] = true  # default for now
@@ -421,24 +511,47 @@ begin
   @filename = ARGV[0]
 #  puts "Filename: #{@filename}"
 
-  if File.extname(@filename) != ".tf"
-    raise "ERROR: #{@filename} not a SmarTest TF file!"
+  if @command_options[:limits]
+    @command_options[:testflow] = false
+    @command_options[:testsuites] = false
+    # limits CSV input file
+    if File.extname(@filename) != ".csv"
+      raise "ERROR: #{@filename} not a SmarTest CSV file!"
+    end
+  else
+    # assume TF input file
+    if File.extname(@filename) != ".tf"
+      raise "ERROR: #{@filename} not a SmarTest TF file!"
+    end
   end
 
   # get data from file, into array
-  get_file_data
+  if @command_options[:limits]
+    get_file_data(type: :limits)
+  else
+    # test suites or tes flow
+    get_file_data
+  end
 
-  # Process test method data first
-  get_test_methods if @command_options[:testsuites] 
-#  print_test_methods
+  if @command_options[:testsuites]
+    # Process test method data first
+    get_test_methods
+#    print_test_methods
 
-  # Then process test suite data
-  get_test_suites if @command_options[:testsuites] 
-#  print_test_suites
-  print_test_suites_full if @command_options[:testsuites] 
+    # Then process test suite data
+    get_test_suites
+#    print_test_suites  # for script debug-- does not print out everything
+    print_test_suites_full
 
-  # process test flow data
-  print_test_flow if @command_options[:testflow] 
+  elsif @command_options[:testflow]
+    # process test flow data
+    print_test_flow if @command_options[:testflow] 
+
+  elsif @command_options[:limits]
+    get_limits
+    print_limits
+  end
+
 
 
 end
