@@ -1,3 +1,4 @@
+#!/usr/bin/env ruby
 #require 'rubygems'
 require 'optparse'
 
@@ -14,6 +15,19 @@ include DansRubyLibrary
 #
 #  Outputs CSV to display, capture to file if desired
 #
+
+# Overwrite the print method to be able to select between stdout and a file
+# Quick 'n dirty and hacky and slow with opens and closes for each line
+def print(line)
+  if $output_filename == '__to_stdout'
+    printf("%s",line)
+  else
+    f = File.open($output_filename,'a')
+    f.write(line)
+    f.close()
+  end
+end
+
 
 def get_limits(options={})
   options = {
@@ -478,11 +492,18 @@ end
 # main basically
 begin
 
+  # Output to stdout as default
+  $output_filename = "__to_stdout"
+
   # interpret command line options
   @command_options = {
     testflow:   false,
     testsuites: true,
+    out_csv: false,
+    multiple: false,
+    files: 0
   }
+
   option_parser = OptionParser.new do |opts|
     opts.banner = "Usage: parse_smartest.rb <INPUT FILE> [options]"
     opts.separator ''
@@ -491,6 +512,8 @@ begin
     opts.on('-s', '--testsuites', 'Output sorted test suite CSV from a test flow file (Default operation)') { @command_options[:testsuites] = true }
     opts.on('-f', '--testflow', 'Output test_flow section from a test flow file') { @command_options[:testflow] = true }
     opts.on('-l', '--limits', 'Output sorted limits from a limits file') { @command_options[:limits] = true }
+    opts.on('-o', '--output_csv', 'Output as csv automatically instead of to stdout') { @command_options[:out_csv] = true }
+    opts.on('-m', '--multiple', 'Input a list of files from bash') { @command_options[:multiple] = true }
   end
 
   @command_options[:omit_local_flags] = true  # default for now
@@ -501,15 +524,22 @@ begin
   if @command_options[:testflow]
     @command_options[:testsuites] = false
   end
-  
+
   # ERROR CHECKING of arguments
-  if ARGV.length != 1
-#    raise "ERROR: Invalid number of arguments"
+  if ARGV.length != 1 and @command_options[:multiple] == false
+    #raise "ERROR: Invalid number of arguments"
     puts option_parser
     exit
   end
-  @filename = ARGV[0]
-#  puts "Filename: #{@filename}"
+
+  ARGV.each do |filename|
+  @filename = filename
+  if @command_options[:out_csv]
+    $output_filename = filename + ".csv"
+    File.delete($output_filename) if File.exist?($output_filename)
+  end
+
+  #puts "Filename: #{@filename}"
 
   if @command_options[:limits]
     @command_options[:testflow] = false
@@ -530,6 +560,7 @@ begin
     get_file_data(type: :limits)
   else
     # test suites or tes flow
+    print " asdf"
     get_file_data
   end
 
@@ -552,6 +583,6 @@ begin
     print_limits
   end
 
-
+end
 
 end
