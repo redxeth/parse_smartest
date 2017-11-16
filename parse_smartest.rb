@@ -96,8 +96,35 @@ def print_limits(options={})
 
 end
 
-# output test flow (as what??)
-def print_test_flow(options={})
+# output test suite section only
+def print_test_suite_section(options={})
+  options = {
+  }.merge(options)
+
+  in_test_suite_section = false
+
+  # go thru file data
+  @testflow_lines.each_index do |linenum|
+    line = @testflow_lines[linenum]
+    line.gsub!(/\r/,""); line.gsub!(/\n/,"")
+
+    if line =~ /^------/ && in_test_suite_section
+      in_test_suite_section = false
+    end
+
+    if in_test_suite_section
+      print "#{line}\n"
+    end
+
+    if line =~ /^test_suites/
+      in_test_suite_section = true
+    end
+  end
+
+end
+
+# output test flow section only
+def print_test_flow_section (options={})
   options = {
   }.merge(options)
 
@@ -349,15 +376,16 @@ def get_test_suites(options={})
         # grab test suite data
         @ts_data_types.each do |datatype|
           to_find = Regexp.new (datatype.to_s + " = ")
+          # clean up extra spaces around equals sign
+          line.gsub!(/  =/,' =')
+          line.gsub!(/=  /,'= ')
           if line =~ to_find
             line.gsub!(/, /,"-")  # sub for any comma delimited data
             line.gsub!(/,/,"-")  # sub for any comma delimited data
             temp = line.split(' ')
             line_data = temp[2] # grab data
             line_data.gsub!(/;/,"")    # remove semicolon
-            unless @command_options[:omit_local_flags] && datatype == :local_flags
-              test_suite[datatype.to_sym] = line_data
-            end
+            test_suite[datatype.to_sym] = line_data
           end
         end
       end
@@ -461,13 +489,13 @@ end
 # reads input data from file,
 # puts into @testflow_lines
 def get_file_data(options={})
-  options={ type: :testflow 
+  options={ file_type: :testflow 
           }.merge(options)
   fp = FileParser.new
   fp.open(filename: @filename)
-  if options[:type] == :testflow
+  if options[:file_type] == :testflow
     @testflow_lines = fp.readlines
-  elsif options[:type] == :limits
+  elsif options[:file_type] == :limits
     @limits_lines = fp.readlines
   else
     fail "Invalid type '#{options[:type]}' passed to 'get_file_data'!"
@@ -488,17 +516,19 @@ begin
     opts.separator ''
     opts.on('-h', '--help', 'Display help' ) { puts opts; exit }
     opts.separator ("--------------------")
-    opts.on('-s', '--testsuites', 'Output sorted test suite CSV from a test flow file (Default operation)') { @command_options[:testsuites] = true }
-    opts.on('-f', '--testflow', 'Output test_flow section from a test flow file') { @command_options[:testflow] = true }
+    opts.separator (" TEST FLOW options:  ")
+    opts.on('-c', '--testsuite_csv', 'Output sorted test suite CSV from a test flow file (Default operation)') { @command_options[:testsuites] = true }
+    opts.on('-s', '--testsuite_section', 'Output test suite section from a test flow file') { @command_options[:testsuite_section] = true }
+    opts.on('-f', '--testflow_section', 'Output test_flow section from a test flow file') { @command_options[:testflow_section] = true }
+    opts.separator ("--------------------")
+    opts.separator (" TEST LIMIT options:  ")
     opts.on('-l', '--limits', 'Output sorted limits from a limits file') { @command_options[:limits] = true }
   end
 
-  @command_options[:omit_local_flags] = true  # default for now
-  
   option_parser.parse!
 
   # test flow option overrides test suites output option
-  if @command_options[:testflow]
+  if @command_options[:testflow_section] || @command_options[:testsuite_section]
     @command_options[:testsuites] = false
   end
   
@@ -512,7 +542,8 @@ begin
 #  puts "Filename: #{@filename}"
 
   if @command_options[:limits]
-    @command_options[:testflow] = false
+    @command_options[:testflow_section] = false
+    @command_options[:testsuite_section] = false
     @command_options[:testsuites] = false
     # limits CSV input file
     if File.extname(@filename) != ".csv"
@@ -527,7 +558,7 @@ begin
 
   # get data from file, into array
   if @command_options[:limits]
-    get_file_data(type: :limits)
+    get_file_data(file_type: :limits)
   else
     # test suites or tes flow
     get_file_data
@@ -543,9 +574,13 @@ begin
 #    print_test_suites  # for script debug-- does not print out everything
     print_test_suites_full
 
-  elsif @command_options[:testflow]
+  elsif @command_options[:testflow_section]
     # process test flow data
-    print_test_flow if @command_options[:testflow] 
+    print_test_flow_section if @command_options[:testflow_section] 
+
+  elsif @command_options[:testsuite_section]
+    # process test suite data
+    print_test_suite_section if @command_options[:testsuite_section] 
 
   elsif @command_options[:limits]
     get_limits
