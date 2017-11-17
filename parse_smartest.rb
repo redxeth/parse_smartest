@@ -7,16 +7,11 @@ require 'pathname'
 require "./lib/DansRubyLibrary"
 include DansRubyLibrary
 
-#require 'logger'
-
-# -- parse_church_data.rb <filename.csv>--
-#
 # Purpose:
 #  Parse through smartest test flow file to help for comparison
 #  and analysis purposes.
 #
-#  Outputs CSV to display, capture to file if desired
-#
+# (for dev debugging, do: byebug ./parse_smartest.rb)
 
 # Overwrite the print method to be able to select between stdout and a file
 # Quick 'n dirty and hacky and slow with opens and closes for each line
@@ -529,7 +524,7 @@ begin
   @command_options = {
     testflow:   false,
     testsuites: true,
-    out_csv: false,
+    out_en: false,
     multiple: false,
     files: 0,
     prefix: false
@@ -550,11 +545,14 @@ begin
     opts.separator ("--------------------")
     opts.separator (" INPUT/ OUTPUT options:  ")
     opts.on('-o','--out=[prefix]','Output as csv automatically instead of to stdout, optionally use prefix for filename') do |prefix| 
-      @command_options[:out_csv] = true
+      @command_options[:out_en] = true
+      if prefix =~ /ut=/           # to catch if user makes typo and uses only one '-'
+        prefix.gsub!(/ut=/,'')
+      end
       @command_options[:prefix] = prefix
     end
 #    opts.on('-m', '--multiple', 'Input a list of files from bash and output to csv files') { @command_options[:multiple] = true
-#    @command_options[:out_csv] = true }
+#    @command_options[:out_en] = true }
   end
 
   option_parser.parse!
@@ -570,41 +568,65 @@ begin
     puts option_parser
     exit
   elsif ARGV.length > 1
-    @command_options[:out_csv] = true
+    @command_options[:out_en] = true
+  end
+
+  # indicator as to option chosen
+  if @command_options[:limits]
+    puts "Processing a Test Limits File..."
+  else
+    puts "Processing a Test Flow File..."
   end
   
   ARGV.each do |filename|
-    if @command_options[:out_csv]
-    
-    end
     @filename = filename
-    if @command_options[:out_csv]
-      $output_filename = filename + ".csv"
-      if @command_options[:prefix] 
-        base_file = Pathname.new(filename).basename
-        dir_name = Pathname.new(filename).dirname
-        $output_filename = File.join(dir_name,@command_options[:prefix] + "_" + base_file.to_s)
-      end
-      printf("Processing %s....writing to %s....",filename,$output_filename) 
-      File.delete($output_filename) if File.exist?($output_filename)
-    end
-
-    #puts "Filename: #{@filename}"
 
     if @command_options[:limits]
+      # limits CSV input file
       @command_options[:testflow_section] = false
       @command_options[:testsuite_section] = false
       @command_options[:testsuites] = false
-      # limits CSV input file
       if File.extname(@filename) != ".csv"
-        raise "ERROR: #{@filename} not a SmarTest CSV file!"
+        fail "\nERROR: #{@filename} not a SmarTest CSV file!"
       end
     else
       # assume TF input file
       if File.extname(@filename) != ".tf"
-        raise "ERROR: #{@filename} not a SmarTest TF file!"
+        fail "\nERROR: #{@filename} not a SmarTest TF file!"
       end
     end
+
+    if @command_options[:out_en]
+      if @command_options[:limits]
+        # Limits CSV input file
+        # double-check that input file is not previously processed file output
+        if filename =~ /\.tf\.csv/ || filename =~ /\.limits\.csv/
+          next # skip to next file
+        end
+        base_file = Pathname.new(filename).basename(".csv")  # remove extension
+        dir_name = Pathname.new(filename).dirname
+        $output_filename = File.join(dir_name,base_file.to_s + ".limits.csv")
+      elsif @command_options[:testflow_section]
+        base_file = Pathname.new(filename).basename(".tf")  # remove extension
+        dir_name = Pathname.new(filename).dirname
+        $output_filename = File.join(dir_name,base_file.to_s + ".testflow")
+      elsif @command_options[:testsuite_section]
+        base_file = Pathname.new(filename).basename(".tf")  # remove extension
+        dir_name = Pathname.new(filename).dirname
+        $output_filename = File.join(dir_name,base_file.to_s + ".testsuites")
+      else
+        # assume TF input file, generate output filename
+        $output_filename = filename + ".csv"
+      end
+      if @command_options[:prefix] 
+        base_file = Pathname.new($output_filename).basename
+        dir_name = Pathname.new($output_filename).dirname
+        $output_filename = File.join(dir_name,@command_options[:prefix] + "_" + base_file.to_s)
+      end
+      printf("Processing %s... writing to %s ...",filename,$output_filename) 
+      File.delete($output_filename) if File.exist?($output_filename)
+    end
+
 
     # get data from file, into array
     if @command_options[:limits]
@@ -637,7 +659,7 @@ begin
       print_limits
     end
 
-    if @command_options[:out_csv]
+    if @command_options[:out_en]
       printf("Done!\n") 
     end
   end
