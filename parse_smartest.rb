@@ -1,5 +1,8 @@
+#!/usr/bin/env ruby
 #require 'rubygems'
 require 'optparse'
+require 'pathname'
+
 
 require "./lib/DansRubyLibrary"
 include DansRubyLibrary
@@ -14,6 +17,19 @@ include DansRubyLibrary
 #
 #  Outputs CSV to display, capture to file if desired
 #
+
+# Overwrite the print method to be able to select between stdout and a file
+# Quick 'n dirty and hacky and slow with opens and closes for each line
+def print(line)
+  if $output_filename == '__to_stdout'
+    printf("%s",line)
+  else
+    f = File.open($output_filename,'a')
+    f.write(line)
+    f.close()
+  end
+end
+
 
 def get_limits(options={})
   options = {
@@ -506,11 +522,19 @@ end
 # main basically
 begin
 
+  # Output to stdout as default
+  $output_filename = "__to_stdout"
+
   # interpret command line options
   @command_options = {
     testflow:   false,
     testsuites: true,
+    out_csv: false,
+    multiple: false,
+    files: 0,
+    prefix: false
   }
+
   option_parser = OptionParser.new do |opts|
     opts.banner = "Usage: parse_smartest.rb <INPUT FILE> [options]"
     opts.separator ''
@@ -523,70 +547,99 @@ begin
     opts.separator ("--------------------")
     opts.separator (" TEST LIMIT options:  ")
     opts.on('-l', '--limits', 'Output sorted limits from a limits file') { @command_options[:limits] = true }
+    opts.separator ("--------------------")
+    opts.separator (" INPUT/ OUTPUT options:  ")
+    opts.on('-o','--out=[prefix]','Output as csv automatically instead of to stdout, optionally use prefix for filename') do |prefix| 
+      @command_options[:out_csv] = true
+      @command_options[:prefix] = prefix
+    end
+#    opts.on('-m', '--multiple', 'Input a list of files from bash and output to csv files') { @command_options[:multiple] = true
+#    @command_options[:out_csv] = true }
   end
 
   option_parser.parse!
-
+  
   # test flow option overrides test suites output option
   if @command_options[:testflow_section] || @command_options[:testsuite_section]
     @command_options[:testsuites] = false
   end
-  
+
   # ERROR CHECKING of arguments
-  if ARGV.length != 1
-#    raise "ERROR: Invalid number of arguments"
+  if ARGV.length == 0
+    #raise "ERROR: Invalid number of arguments"
     puts option_parser
     exit
+  elsif ARGV.length > 1
+    @command_options[:out_csv] = true
   end
-  @filename = ARGV[0]
-#  puts "Filename: #{@filename}"
-
-  if @command_options[:limits]
-    @command_options[:testflow_section] = false
-    @command_options[:testsuite_section] = false
-    @command_options[:testsuites] = false
-    # limits CSV input file
-    if File.extname(@filename) != ".csv"
-      raise "ERROR: #{@filename} not a SmarTest CSV file!"
+  
+  ARGV.each do |filename|
+    if @command_options[:out_csv]
+    
     end
-  else
-    # assume TF input file
-    if File.extname(@filename) != ".tf"
-      raise "ERROR: #{@filename} not a SmarTest TF file!"
+    @filename = filename
+    if @command_options[:out_csv]
+      $output_filename = filename + ".csv"
+      if @command_options[:prefix] 
+        base_file = Pathname.new(filename).basename
+        dir_name = Pathname.new(filename).dirname
+        $output_filename = File.join(dir_name,@command_options[:prefix] + "_" + base_file.to_s)
+      end
+      printf("Processing %s....writing to %s....",filename,$output_filename) 
+      File.delete($output_filename) if File.exist?($output_filename)
+    end
+
+    #puts "Filename: #{@filename}"
+
+    if @command_options[:limits]
+      @command_options[:testflow_section] = false
+      @command_options[:testsuite_section] = false
+      @command_options[:testsuites] = false
+      # limits CSV input file
+      if File.extname(@filename) != ".csv"
+        raise "ERROR: #{@filename} not a SmarTest CSV file!"
+      end
+    else
+      # assume TF input file
+      if File.extname(@filename) != ".tf"
+        raise "ERROR: #{@filename} not a SmarTest TF file!"
+      end
+    end
+
+    # get data from file, into array
+    if @command_options[:limits]
+      get_file_data(file_type: :limits)
+    else
+      # test suites or tes flow
+      get_file_data
+    end
+
+    if @command_options[:testsuites]
+      # Process test method data first
+      get_test_methods
+  #    print_test_methods
+
+      # Then process test suite data
+      get_test_suites
+  #    print_test_suites  # for script debug-- does not print out everything
+      print_test_suites_full
+
+    elsif @command_options[:testflow_section]
+      # process test flow data
+      print_test_flow_section if @command_options[:testflow_section] 
+
+    elsif @command_options[:testsuite_section]
+      # process test suite data
+      print_test_suite_section if @command_options[:testsuite_section] 
+
+    elsif @command_options[:limits]
+      get_limits
+      print_limits
+    end
+
+    if @command_options[:out_csv]
+      printf("Done!\n") 
     end
   end
-
-  # get data from file, into array
-  if @command_options[:limits]
-    get_file_data(file_type: :limits)
-  else
-    # test suites or tes flow
-    get_file_data
-  end
-
-  if @command_options[:testsuites]
-    # Process test method data first
-    get_test_methods
-#    print_test_methods
-
-    # Then process test suite data
-    get_test_suites
-#    print_test_suites  # for script debug-- does not print out everything
-    print_test_suites_full
-
-  elsif @command_options[:testflow_section]
-    # process test flow data
-    print_test_flow_section if @command_options[:testflow_section] 
-
-  elsif @command_options[:testsuite_section]
-    # process test suite data
-    print_test_suite_section if @command_options[:testsuite_section] 
-
-  elsif @command_options[:limits]
-    get_limits
-    print_limits
-  end
-
-
 
 end
